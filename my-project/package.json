@@ -1,0 +1,27 @@
+{
+  "name": "my-project",
+  "version": "1.0.0",
+  "description": "A TypeScript project for demonstrating application structure.",
+  "main": "src/app.ts",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/app.js",
+    "dev": "ts-node src/app.ts"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^4.0.0",
+    "ts-node": "^10.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/my-project.git"
+  },
+  "keywords": [],
+  "author": "Your Name",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/yourusername/my-project/issues"
+  },
+  "homepage": "https://github.com/yourusername/my-project#readme"
+}
