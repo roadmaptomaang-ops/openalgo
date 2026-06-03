@@ -20,7 +20,7 @@ import requests
 # ============================================================
 # CONFIG
 # ============================================================
-OPENALGO_API_KEY     = "ad133314051311b7d2de83fa8300b3b3ad260266d6a7fc6a7b4135afc9042f58"
+OPENALGO_API_KEY     = "b2b89302e4f1ec3f478feb3d820fbd73106a2cca7991ee489e33966b86ae6cc5"
 OPENALGO_HOST        = "http://127.0.0.1:5000"
 
 ENTRY_TIME           = "09:20"   # earliest entry
