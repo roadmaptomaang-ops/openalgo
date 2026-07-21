@@ -589,9 +589,9 @@ def get_auth_token(name, bypass_cache: bool = False):
     # Bypass cache if requested (e.g., after 403 error for fresh token)
     if bypass_cache:
         logger.debug(f"Bypassing cache for user: {name} (fresh token requested)")
-        # Clear stale cache entry
-        if cache_key in auth_cache:
-            del auth_cache[cache_key]
+        # Clear stale cache entry (pop, not del — a concurrent request may
+        # have already evicted this key)
+        auth_cache.pop(cache_key, None)
         # Query database directly
         auth_obj = get_auth_token_dbquery(name)
         if isinstance(auth_obj, Auth) and not auth_obj.is_revoked:
@@ -606,7 +606,8 @@ def get_auth_token(name, bypass_cache: bool = False):
         if isinstance(auth_obj, Auth) and not auth_obj.is_revoked:
             return decrypt_token(auth_obj.auth)
         else:
-            del auth_cache[cache_key]
+            # pop, not del — a concurrent request may have already evicted this key
+            auth_cache.pop(cache_key, None)
             return None
     else:
         auth_obj = get_auth_token_dbquery(name)
@@ -957,8 +958,9 @@ def get_auth_token_broker(provided_api_key, include_feed_token=False):
             try:
                 auth_obj = Auth.query.filter_by(name=user_id).first()
                 if auth_obj and auth_obj.is_revoked:
-                    # Token was revoked, remove from cache
-                    del auth_cache[cache_key]
+                    # Token was revoked, remove from cache (pop, not del — a
+                    # concurrent request may have already evicted this key)
+                    auth_cache.pop(cache_key, None)
                     logger.warning(f"Cached auth token was revoked for user_id '{user_id}'.")
                     return (None, None, None) if include_feed_token else (None, None)
                 # Not revoked, return cached result
@@ -967,7 +969,7 @@ def get_auth_token_broker(provided_api_key, include_feed_token=False):
             except Exception as e:
                 logger.exception(f"Error checking revocation status: {e}")
                 # On error, don't use cache
-                del auth_cache[cache_key]
+                auth_cache.pop(cache_key, None)
 
     # Cache miss or revocation check failed - fetch from database
     user_id = verify_api_key(provided_api_key)

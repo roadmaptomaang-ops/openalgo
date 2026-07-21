@@ -9,6 +9,7 @@ import requests
 from sqlalchemy import Column, Float, Index, Integer, Sequence, String, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import scoped_session, sessionmaker
+from sqlalchemy.pool import NullPool
 
 from extensions import socketio  # Import SocketIO
 from utils.logging import get_logger
@@ -18,7 +19,19 @@ logger = get_logger(__name__)
 
 DATABASE_URL = os.getenv("DATABASE_URL")  # Replace with your database path
 
-engine = create_engine(DATABASE_URL)
+# SQLite: NullPool + a busy timeout, matching every other DB module in this
+# codebase. This engine used to open its own unpooled connection to the same
+# SQLite file the main app is using — under concurrent access (e.g. UI
+# polling quotes during login) that can hang indefinitely on a file lock
+# instead of erroring, which is what made master contract downloads freeze.
+if DATABASE_URL and "sqlite" in DATABASE_URL:
+    engine = create_engine(
+        DATABASE_URL,
+        poolclass=NullPool,
+        connect_args={"check_same_thread": False, "timeout": 15},
+    )
+else:
+    engine = create_engine(DATABASE_URL, pool_size=50, max_overflow=100, pool_timeout=10)
 db_session = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
 Base = declarative_base()
 Base.query = db_session.query_property()
