@@ -1,0 +1,24 @@
+{
+  "date": "2026-06-19",
+  "regime": "TRENDING",
+  "direction_bias": "NEUTRAL",
+  "pnl_low": 1200.0,
+  "pnl_high": 1612.0,
+  "confidence": 0.338,
+  "similar_days": 9,
+  "patterns_matched": [],
+  "rules": {
+    "entry_window": "09:20 \u2013 11:30",
+    "adx_floor": 24,
+    "max_trades": 3,
+    "direction": "NEUTRAL"
+  },
+  "reasoning": [
+    "5-day win rate is 50.0% \u2192 edge holding",
+    "Previous day P&L: \u20b9566 (profit)",
+    "Regime classified as TRENDING (avg ADX 29.3, matched 9 similar past days)",
+    "On past TRENDING days: avg P&L \u20b91,429, direction bias NEUTRAL"
+  ],
+  "sage_recommendation": "NORMAL \u2014 mixed day, follow standard rules",
+  "recent_5d_wr": 0.5
+}

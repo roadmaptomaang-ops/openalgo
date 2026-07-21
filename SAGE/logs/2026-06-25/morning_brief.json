@@ -1,0 +1,24 @@
+{
+  "date": "2026-06-25",
+  "regime": "RANGE",
+  "direction_bias": "CE",
+  "pnl_low": -1300.0,
+  "pnl_high": -425.0,
+  "confidence": 0.132,
+  "similar_days": 4,
+  "patterns_matched": [],
+  "rules": {
+    "entry_window": "09:30 \u2013 11:00",
+    "adx_floor": 26,
+    "max_trades": 2,
+    "direction": "CE"
+  },
+  "reasoning": [
+    "5-day win rate is 31.9% \u2192 under pressure",
+    "Previous day P&L: \u20b9-4,679 (loss)",
+    "Regime classified as RANGE (avg ADX 47.0, matched 4 similar past days)",
+    "On past RANGE days: avg P&L \u20b9-1,920, direction bias CE"
+  ],
+  "sage_recommendation": "CAUTIOUS \u2014 range day, tighter filters",
+  "recent_5d_wr": 0.3191489361702128
+}

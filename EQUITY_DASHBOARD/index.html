@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Equity Dashboard — Live Heatmap</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  /* Laptop-only layout. No mobile/responsive breakpoints by design — a
+     narrow window scrolls horizontally rather than squeezing the grid into
+     unreadable slivers. */
+  html{overflow-x:auto}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+       background:#f3f4f6;color:#1f2430;padding:24px;min-width:1180px}
+  .header{display:flex;justify-content:space-between;align-items:center;
+           margin-bottom:18px;padding-bottom:14px;gap:16px;white-space:nowrap;
+           border-bottom:1px solid #dfe3e8}
+  h1{font-size:20px;font-weight:700;letter-spacing:-.01em;color:#111827}
+  .badge{font-size:11px;font-weight:700;letter-spacing:.08em;color:#4338ca;
+         border:1px solid #c7d2fe;background:#eef0ff;
+         padding:3px 10px;border-radius:4px;margin-left:10px}
+  .status{font-size:13px;color:#6b7280}
+  .status.live::before{content:"●";color:#16a34a;margin-right:6px;
+                        animation:pulse 2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .section-title{font-size:14px;font-weight:700;color:#374151;
+                  text-transform:uppercase;letter-spacing:.06em;margin:20px 0 10px;
+                  display:flex;align-items:center;gap:10px}
+  .legend{display:flex;align-items:center;gap:6px;margin-left:auto}
+  .legend .pill{font-size:11px;font-weight:700;color:#fff;padding:3px 10px;
+                border-radius:14px;min-width:26px;text-align:center}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));
+        gap:3px}
+  .card{border-radius:4px;padding:10px 12px;cursor:pointer;color:#fff;
+        transition:transform .12s ease,box-shadow .12s ease,filter .12s ease}
+  .card:hover{transform:scale(1.035);z-index:10;position:relative;
+              box-shadow:0 8px 20px rgba(0,0,0,.22);filter:brightness(1.06)}
+  .card.ours{box-shadow:inset 0 0 0 2px #4338ca}
+  .card.ours:hover{box-shadow:inset 0 0 0 2px #4338ca,0 8px 20px rgba(0,0,0,.22)}
+  .card .sym{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;
+             text-overflow:ellipsis}
+  .card .row{display:flex;justify-content:space-between;align-items:baseline;
+             margin-top:8px;gap:6px}
+  .card .price{font-size:13px;font-weight:600;opacity:.95}
+  .card .chg{font-size:12px;font-weight:700}
+  .err{color:#dc2626;font-size:13px;padding:10px 0}
+
+  /* discrete 7-bucket palette, matches the legend order 5·3·1·0%·-1·-3·-5 */
+  .b5{background:#0f6b34}   .b3{background:#1f9d55}   .b1{background:#5cbf7c}
+  .b0{background:#8b93a1}
+  .bm1{background:#e08585}  .bm3{background:#d33f3f}  .bm5{background:#8c1f1f}
+
+  .tooltip{position:fixed;pointer-events:none;background:#fff;
+           border-radius:8px;box-shadow:0 12px 32px rgba(15,23,42,.18),
+           0 0 0 1px rgba(15,23,42,.06);
+           display:none;z-index:1000;overflow:hidden;min-width:190px}
+  .tooltip .tt-inner{display:flex}
+  .tooltip .tt-accent{width:5px;flex-shrink:0}
+  .tooltip .tt-body{padding:10px 14px;flex:1}
+  .tooltip .tt-title{font-size:13px;font-weight:700;color:#111827;
+                      display:flex;align-items:center;gap:6px;margin-bottom:6px}
+  .tooltip .tt-tag{font-size:9px;font-weight:700;color:#4338ca;background:#eef0ff;
+                    padding:2px 6px;border-radius:3px}
+  .tooltip .tt-row{display:flex;justify-content:space-between;gap:22px;
+                    font-size:12px;color:#6b7280;padding:2px 0}
+  .tooltip .tt-row b{color:#111827;font-weight:600;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div style="display:flex;align-items:center">
+    <h1>Equity Dashboard</h1>
+    <span class="badge">LIVE HEATMAP · READ-ONLY</span>
+  </div>
+  <div class="status live" id="status">connecting…</div>
+</div>
+
+<div id="err"></div>
+
+<div class="section-title">
+  Our Arsenal — 20 stocks we trade
+  <span class="legend">
+    <span class="pill b5">5</span><span class="pill b3">3</span>
+    <span class="pill b1">1</span><span class="pill b0">0%</span>
+    <span class="pill bm1">-1</span><span class="pill bm3">-3</span>
+    <span class="pill bm5">-5</span>
+  </span>
+</div>
+<div class="grid" id="our20Grid"></div>
+
+<div class="section-title">Full Market — NIFTY 100 (our 20 outlined in indigo)</div>
+<div class="grid" id="fullGrid"></div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+const REFRESH_MS = 12000;
+
+// ── discrete 7-bucket colour scale (matches legend 5·3·1·0%·-1·-3·-5) ────
+function bucketFor(pct) {
+  if (pct >= 5)  return 'b5';
+  if (pct >= 3)  return 'b3';
+  if (pct >= 1)  return 'b1';
+  if (pct > -1)  return 'b0';
+  if (pct > -3)  return 'bm1';
+  if (pct > -5)  return 'bm3';
+  return 'bm5';
+}
+function fmtPct(pct) { return `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`; }
+function fmtVol(v) {
+  if (v >= 1e7) return (v/1e7).toFixed(2) + ' Cr';
+  if (v >= 1e5) return (v/1e5).toFixed(2) + ' L';
+  if (v >= 1e3) return (v/1e3).toFixed(1) + ' K';
+  return String(v || 0);
+}
+
+function renderGrid(containerEl, rows) {
+  containerEl.innerHTML = rows.map(r => `
+    <div class="card ${bucketFor(r.chg_pct)} ${r.ours ? 'ours' : ''}"
+         data-symbol="${r.symbol}" data-ltp="${r.ltp}" data-open="${r.open}"
+         data-high="${r.high || ''}" data-low="${r.low || ''}"
+         data-chg="${r.chg_pct}" data-ours="${r.ours ? 1 : 0}">
+      <div class="sym">${r.symbol}</div>
+      <div class="row">
+        <span class="price">₹${r.ltp}</span>
+        <span class="chg">${fmtPct(r.chg_pct)}</span>
+      </div>
+    </div>`).join('');
+}
+
+function render(data) {
+  const statusEl = document.getElementById('status');
+  const errEl = document.getElementById('err');
+  errEl.innerHTML = data.error ? `<div class="err">⚠ ${data.error}</div>` : '';
+  statusEl.textContent = data.updated_at ? `updated ${data.updated_at} IST` : 'waiting for first fetch…';
+
+  const rows = data.rows || [];
+  renderGrid(document.getElementById('our20Grid'), rows.filter(r => r.ours));
+  renderGrid(document.getElementById('fullGrid'), rows);
+}
+
+async function poll() {
+  try {
+    const r = await fetch('/api/data');
+    render(await r.json());
+  } catch (e) {
+    document.getElementById('status').textContent = 'connection lost — retrying…';
+  }
+}
+
+// ── hover tooltip (event delegation — cards get replaced every render,
+//    the two grid containers never do, so listeners live here) ──────────
+const tooltip = document.getElementById('tooltip');
+
+function showTooltip(card, clientX, clientY) {
+  const d = card.dataset;
+  const bucket = bucketFor(parseFloat(d.chg));
+  const hasHL = d.high && d.low;
+  tooltip.innerHTML = `
+    <div class="tt-inner">
+      <div class="tt-accent ${bucket}"></div>
+      <div class="tt-body">
+        <div class="tt-title">${d.symbol}
+          ${d.ours === '1' ? '<span class="tt-tag">OUR ARSENAL</span>' : ''}
+        </div>
+        <div class="tt-row"><span>Current</span><b>${d.ltp}</b></div>
+        <div class="tt-row"><span>Open</span><b>${d.open}</b></div>
+        ${hasHL ? `<div class="tt-row"><span>High</span><b>${d.high}</b></div>
+        <div class="tt-row"><span>Low</span><b>${d.low}</b></div>` : ''}
+        <div class="tt-row"><span>Change</span><b>${fmtPct(parseFloat(d.chg))}</b></div>
+      </div>
+    </div>`;
+  tooltip.style.display = 'block';
+  positionTooltip(clientX, clientY);
+}
+function positionTooltip(clientX, clientY) {
+  const pad = 16;
+  const tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
+  let left = clientX + pad, top = clientY + pad;
+  if (left + tw > window.innerWidth) left = clientX - tw - pad;
+  if (top + th > window.innerHeight) top = clientY - th - pad;
+  tooltip.style.left = left + 'px';
+  tooltip.style.top = top + 'px';
+}
+function hideTooltip() { tooltip.style.display = 'none'; }
+
+['our20Grid', 'fullGrid'].forEach(id => {
+  const el = document.getElementById(id);
+  el.addEventListener('mouseover', e => {
+    const card = e.target.closest('.card');
+    if (card) showTooltip(card, e.clientX, e.clientY);
+  });
+  el.addEventListener('mousemove', e => {
+    const card = e.target.closest('.card');
+    if (card) positionTooltip(e.clientX, e.clientY);
+  });
+  el.addEventListener('mouseout', e => {
+    const toEl = e.relatedTarget;
+    if (!toEl || !toEl.closest || !toEl.closest('.card')) hideTooltip();
+  });
+});
+
+poll();
+setInterval(poll, REFRESH_MS);
+</script>
+
+</body>
+</html>

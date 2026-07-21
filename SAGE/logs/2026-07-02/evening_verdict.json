@@ -1,0 +1,23 @@
+{
+  "date": "2026-07-02",
+  "status": "PARTIAL",
+  "hypothesis_correct": 0,
+  "regime_predicted": "TRENDING",
+  "regime_actual": "RANGE",
+  "regime_correct": false,
+  "direction_predicted": "NEUTRAL",
+  "direction_actual": "CE",
+  "direction_correct": true,
+  "pnl_predicted_low": 1244.0,
+  "pnl_predicted_high": 1960.0,
+  "actual_pnl": -2491.0,
+  "pnl_in_range": false,
+  "actual_trades": 11,
+  "actual_win_rate": 0.091,
+  "notes": [
+    "Predicted TRENDING \u2192 Actual RANGE (\u2717)",
+    "Predicted bias NEUTRAL \u2192 Actual CE (\u2713)",
+    "P&L range \u20b91,244\u2013\u20b91,960 \u2192 Actual \u20b9-2,491 (OUT OF RANGE)"
+  ],
+  "sage_score": 0.3
+}

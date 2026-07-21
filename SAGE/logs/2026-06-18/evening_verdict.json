@@ -1,0 +1,23 @@
+{
+  "date": "2026-06-18",
+  "status": "CORRECT",
+  "hypothesis_correct": 1,
+  "regime_predicted": "MIXED",
+  "regime_actual": "MIXED",
+  "regime_correct": true,
+  "direction_predicted": "CE",
+  "direction_actual": "CE",
+  "direction_correct": true,
+  "pnl_predicted_low": 300.0,
+  "pnl_predicted_high": 900.0,
+  "actual_pnl": 566.0,
+  "pnl_in_range": true,
+  "actual_trades": 1,
+  "actual_win_rate": 1.0,
+  "notes": [
+    "Predicted MIXED \u2192 Actual MIXED (\u2713)",
+    "Predicted bias CE \u2192 Actual CE (\u2713)",
+    "P&L range \u20b9300\u2013\u20b9900 \u2192 Actual \u20b9566 (IN RANGE)"
+  ],
+  "sage_score": 1.0
+}

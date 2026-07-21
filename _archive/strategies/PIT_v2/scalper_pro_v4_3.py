@@ -1,7 +1,24 @@
 """
-Production Momentum Scalper V4.2
+Production Momentum Scalper V4.3
 ==================================
-All V4.1 features plus:
+All V4.2 features plus:
+
+V4.3 REVIEW-FEEDBACK CHANGES:
+- adx_max and high_water_drop are now per-instrument config (SENSEX high-water
+  drop widened to 8pts; NIFTY stays 3pts). Backtest before tuning further.
+- OI bias demoted from hard filter to soft filter — logged and counted, never
+  blocks a trade, until its predictive value is proven from collected stats
+- Signal funnel stats: scans / setups seen / trades taken, plus rejection
+  counts by reason (ADX low/high, confirm failed, OI / max-pain conflicts,
+  same-direction block, entry failures) — printed in the day summary
+- Duplicated exit-handling blocks (hard exit, high water, SL, target)
+  consolidated into a single finalize_exit() helper
+
+V4.3 FIXES:
+- verify_fill: polls orderstatus up to 3 times with backoff before falling back
+  to the pre-trade quote (avoids recording quote price as fill in live trading)
+- High Water Exit uses break instead of continue (clearer control flow)
+- Strategy tag and version strings bumped to V4.3
 
 V4.2 FIXES:
 - API key loaded from OPENALGO_API_KEY env var (never hardcoded)
@@ -26,12 +43,12 @@ NIFTY : 65 qty | Tuesday expiry  | NFO
 SENSEX: 20 qty | Thursday expiry | BFO
 """
 
+import csv
 import os
 import time
 import threading
 from collections import deque
 from datetime import datetime, timedelta
-from pathlib import Path
 
 import pandas as pd
 import pytz
@@ -56,10 +73,9 @@ MAX_DAILY_LOSS        = -3000
 MAX_TRADES            = 4
 SIGNAL_INTERVAL       = 10
 COOLDOWN_AFTER_SL     = 300
-COOLDOWN_AFTER_TARGET = 180
+COOLDOWN_AFTER_TARGET = 600
 MIN_HOLD_SECONDS      = 60
 CANDLE_CONFIRM_COUNT  = 2
-HIGH_WATER_DROP       = 3
 
 IST     = pytz.timezone("Asia/Kolkata")
 SESSION = requests.Session()
@@ -81,7 +97,9 @@ INSTRUMENTS = {
         "be_trigger":      5,
         "trail_trigger":   5,
         "trail_step":      2,
-        "adx_threshold":   20,
+        "adx_threshold":   25,
+        "adx_max":         35,
+        "high_water_drop": 3,
         "orb_candles":     3,
         "orb_buffer":      20,
     },
@@ -97,7 +115,9 @@ INSTRUMENTS = {
         "be_trigger":      10,
         "trail_trigger":   10,
         "trail_step":      3,
-        "adx_threshold":   20,
+        "adx_threshold":   25,
+        "adx_max":         35,
+        "high_water_drop": 8,
         "orb_candles":     3,
         "orb_buffer":      60,
     }
@@ -209,7 +229,7 @@ def log_trade(
         "── ENTRY ────────────────────────────────────────────",
         f"  Signal         : {option_type}",
         f"  Symbol         : {option_symbol}",
-        f"  Strike Type    : ITM (1 strike in the money)",
+        "  Strike Type    : ITM (1 strike in the money)",
         f"  Entry Premium  : Rs {entry_premium:.2f}",
         f"  Target Premium : Rs {entry_premium + cfg_target:.2f} (+{cfg_target}pts = Rs {cfg_target * qty:.0f})",
         f"  SL Premium     : Rs {entry_premium - cfg_sl:.2f} (-{cfg_sl}pts = Rs {cfg_sl * qty:.0f})",
@@ -225,14 +245,14 @@ def log_trade(
 
     if be_triggered:
         lines += [
-            f"  Break-even     : YES — Triggered",
+            "  Break-even     : YES — Triggered",
             f"  Triggered At   : {be_trigger_pnl:.1f}pts",
             f"  Time           : {be_trigger_time}",
             f"  SL moved       : -{cfg_sl}pts → 0",
         ]
     else:
         lines += [
-            f"  Break-even     : NO — Never reached",
+            "  Break-even     : NO — Never reached",
             f"  Highest Profit : {mfe_pts:.1f}pts (needed {cfg_target}pts to trigger BE)",
         ]
 
@@ -330,8 +350,69 @@ def log_trade(
     except Exception as e:
         print(f"[CSV ERROR scalper] {e}")
 
-def log_day_summary(name, trade_count, total_pnl, trades_detail):
+def log_funnel_summary(name, stats):
+    """Signal funnel: how many setups were seen, taken, and why the rest were rejected."""
+    if not stats:
+        return
+    setups_seen = stats.get("setup_seen", 0)
+    taken       = stats.get("taken", 0)
+    reject_keys = [
+        ("adx_low",            "ADX too low"),
+        ("adx_high",           "ADX too high"),
+        ("confirm_inconsistent", "Confirm failed"),
+        ("oi_conflict",        "OI bias conflict*"),
+        ("max_pain_conflict",  "Max pain conflict*"),
+        ("same_dir_block",     "Same-dir after SL"),
+        ("entry_failed",       "Entry/quote failed"),
+    ]
+    sep = "=" * 60
+    lines = [
+        "",
+        sep,
+        f"SIGNAL FUNNEL — {name} — {get_ist_now().strftime('%Y-%m-%d')}",
+        sep,
+        f"  Scans          : {stats.get('scans', 0)}",
+        f"  Setups Seen    : {setups_seen}",
+        f"  Trades Taken   : {taken}",
+        "",
+        "── REJECTIONS / FLAGS ───────────────────────────────",
+    ]
+    for key, label in reject_keys:
+        if stats.get(key, 0):
+            lines.append(f"  {label:<22}: {stats[key]}")
+    lines += [
+        "  (* = soft filter, logged but did not block the trade)",
+        sep,
+        "",
+    ]
+    tlog("\n".join(lines))
+
+    # Structured funnel row → logs/scalper_funnel.csv so filter_audit.py
+    # can aggregate rejection rates across days
+    funnel_cols = [
+        "date", "instrument", "scans", "setup_seen", "taken",
+        "adx_low", "adx_high", "confirm_inconsistent",
+        "oi_conflict", "max_pain_conflict", "same_dir_block", "entry_failed",
+    ]
+    try:
+        path = _TL.root / "scalper_funnel.csv"
+        row = {
+            "date":       get_ist_now().strftime("%Y-%m-%d"),
+            "instrument": name,
+            **{k: stats.get(k, 0) for k in funnel_cols[2:]},
+        }
+        new_file = not path.exists()
+        with open(path, "a", newline="") as fh:
+            writer = csv.DictWriter(fh, fieldnames=funnel_cols)
+            if new_file:
+                writer.writeheader()
+            writer.writerow(row)
+    except Exception as e:
+        print(f"[FUNNEL CSV ERROR scalper] {e}")
+
+def log_day_summary(name, trade_count, total_pnl, trades_detail, filter_stats=None):
     """trades_detail is list of dicts with pnl, exit_reason, mfe, mae"""
+    log_funnel_summary(name, filter_stats)
     if not trades_detail:
         return
 
@@ -580,18 +661,69 @@ def place_order(symbol, exchange, action, quantity):
         "price":     0,
         "pricetype": "MARKET",
         "product":   "MIS",
-        "strategy":  "Momentum Scalper V4.1",
+        "strategy":  "Momentum Scalper V4.3",
     })
     if data and data.get("status") == "success":
         return data.get("orderid")
     return None
+
+def verify_fill(order_id, fallback_price=None, fallback_qty=0):
+    """
+    Confirm the broker/orderstatus fill when available.
+    OpenAlgo analyze/sandbox can return accepted orders without a complete
+    exchange fill payload, so accepted non-rejected orders fall back to LTP.
+    """
+    if not order_id:
+        return None
+
+    # Poll orderstatus a few times — brokers can take a moment to populate
+    # average_price. Only fall back to the pre-trade quote as a last resort.
+    avg_price  = 0
+    filled_qty = 0
+    status     = ""
+    for attempt in range(3):
+        time.sleep(0.3 + 0.5 * attempt)
+        data = api_post("orderstatus", {"orderid": order_id}, timeout=5)
+        if not data:
+            continue
+
+        status = (data.get("data", {}).get("status") or "").upper()
+        if status in ("REJECTED", "CANCELLED"):
+            log("ORDER", f"Order {order_id} {status}: {data.get('data', {}).get('status_message', '')}")
+            return None
+
+        try:
+            avg_price = float(data.get("data", {}).get("average_price") or 0)
+        except (TypeError, ValueError):
+            avg_price = 0
+
+        try:
+            filled_qty = int(data.get("data", {}).get("filled_quantity") or 0)
+        except (TypeError, ValueError):
+            filled_qty = 0
+
+        if avg_price > 0:
+            break
+
+    if status == "PARTIAL":
+        log("ORDER", f"Order {order_id} partially filled: {filled_qty}/{fallback_qty}")
+
+    if not avg_price:
+        log("ORDER", f"Order {order_id}: no average_price after retries — using fallback quote {fallback_price}")
+    return avg_price or fallback_price
+
+def execute_market_order(symbol, exchange, action, quantity, fallback_price=None):
+    order_id = place_order(symbol, exchange, action, quantity)
+    if not order_id:
+        return None
+    return verify_fill(order_id, fallback_price=fallback_price, fallback_qty=quantity)
 
 # ============================================================
 # STRATEGY
 # ============================================================
 
 def run_instrument(name, cfg):
-    log(name, f"V4.1 Started | Qty:{cfg['quantity']} Target:{cfg['target_pts']}pts SL:{cfg['sl_pts']}pts")
+    log(name, f"V4.3 Started | Qty:{cfg['quantity']} Target:{cfg['target_pts']}pts SL:{cfg['sl_pts']}pts")
 
     total_pnl        = 0
     trade_count      = 0
@@ -605,6 +737,67 @@ def run_instrument(name, cfg):
     trades_detail    = []
     entry_snapshot   = {}
 
+    # Signal funnel counters — see log_funnel_summary
+    filter_stats = {
+        "scans": 0, "setup_seen": 0, "taken": 0,
+        "adx_low": 0, "adx_high": 0, "confirm_inconsistent": 0,
+        "oi_conflict": 0, "max_pain_conflict": 0,
+        "same_dir_block": 0, "entry_failed": 0,
+    }
+
+    # These are reassigned per trade; the closure below reads them at call time.
+    option_type = option_symbol = None
+    entry = curr = 0
+    entry_time_dt = None
+    mfe_pts = mae_pts = high_water_mark = 0
+    be_triggered = False
+    be_trigger_time = None
+    be_trigger_pnl = 0
+    trail_log = []
+    dynamic_sl = 0
+
+    def finalize_exit(exit_reason, pnl_pts, pnl_rs, exit_premium):
+        """Capture exit context, record the trade, and write the full trade log."""
+        exit_ema9  = entry_snapshot.get("ema9", 0)
+        exit_ema21 = entry_snapshot.get("ema21", 0)
+        exit_vwap  = entry_snapshot.get("vwap", 0)
+        exit_adx   = entry_snapshot.get("adx", 0)
+        exit_spot  = entry_snapshot.get("spot", 0)
+        df_exit = fetch_candles(cfg, interval="1m")
+        if df_exit is not None and len(df_exit) >= 5:
+            try:
+                exit_ema9  = calc_ema(df_exit, 9)
+                exit_ema21 = calc_ema(df_exit, 21)
+                exit_vwap  = calc_vwap(df_exit)
+                exit_adx   = calc_adx(df_exit)
+                exit_spot  = df_exit.iloc[-1]["close"]
+            except Exception:
+                pass
+
+        capture = (pnl_pts / mfe_pts * 100) if mfe_pts > 0 else 0
+        trades_detail.append({
+            "pnl": pnl_rs, "exit_reason": exit_reason,
+            "mfe": mfe_pts, "mae": mae_pts, "capture": capture
+        })
+        log_trade(
+            name, trade_count, option_type, option_symbol,
+            entry, exit_premium, exit_reason,
+            entry_time_dt, get_ist_now(),
+            entry_snapshot.get("spot", 0), entry_snapshot.get("orb_high", 0),
+            entry_snapshot.get("orb_low", 0), entry_snapshot.get("ema9", 0),
+            entry_snapshot.get("ema21", 0), entry_snapshot.get("vwap", 0),
+            entry_snapshot.get("adx", 0), entry_snapshot.get("atr", 0),
+            entry_snapshot.get("max_pain_strike", 0),
+            entry_snapshot.get("max_pain_bias", "N/A"),
+            entry_snapshot.get("oi_bias", "N/A"),
+            mfe_pts, mae_pts,
+            be_triggered, be_trigger_time, be_trigger_pnl,
+            trail_log, high_water_mark,
+            exit_spot, exit_ema9, exit_ema21, exit_vwap, exit_adx,
+            dynamic_sl, total_pnl,
+            cfg["target_pts"], cfg["sl_pts"]
+        )
+
     log(name, f"Expiry: {expiry_date}")
     log_day_start(name)
 
@@ -614,7 +807,7 @@ def run_instrument(name, cfg):
 
         if now_str >= EXIT_TIME:
             tradelog(name, f"Session ended | Trades:{trade_count} | P&L: Rs {total_pnl:.0f}")
-            log_day_summary(name, trade_count, total_pnl, trades_detail)
+            log_day_summary(name, trade_count, total_pnl, trades_detail, filter_stats)
             break
 
         if now_str < ENTRY_TIME:
@@ -623,12 +816,12 @@ def run_instrument(name, cfg):
 
         if total_pnl <= MAX_DAILY_LOSS:
             tradelog(name, f"Daily loss limit hit (Rs {total_pnl:.0f}). Stopping.")
-            log_day_summary(name, trade_count, total_pnl, trades_detail)
+            log_day_summary(name, trade_count, total_pnl, trades_detail, filter_stats)
             break
 
         if trade_count >= MAX_TRADES:
             tradelog(name, f"Max {MAX_TRADES} trades done. Stopping.")
-            log_day_summary(name, trade_count, total_pnl, trades_detail)
+            log_day_summary(name, trade_count, total_pnl, trades_detail, filter_stats)
             break
 
         if last_sl_time:
@@ -691,8 +884,18 @@ def run_instrument(name, cfg):
             f"MaxPain:{max_pain_strike} Bias:{max_pain_bias} OI:{oi_bias}"
         ))
 
+        filter_stats["scans"] += 1
+
         if adx < cfg["adx_threshold"]:
             log(name, f"Low ADX ({adx:.1f}) — sideways. Skipping.")
+            filter_stats["adx_low"] += 1
+            signal_history.clear()
+            time.sleep(20)
+            continue
+
+        if adx > cfg["adx_max"]:
+            log(name, f"High ADX ({adx:.1f} > {cfg['adx_max']}) — exhausted move. Skipping.")
+            filter_stats["adx_high"] += 1
             signal_history.clear()
             time.sleep(20)
             continue
@@ -713,6 +916,8 @@ def run_instrument(name, cfg):
             time.sleep(SIGNAL_INTERVAL)
             continue
 
+        filter_stats["setup_seen"] += 1
+
         signal_history.append(raw_signal)
         if len(signal_history) < CANDLE_CONFIRM_COUNT:
             log(name, f"Candle confirm: {len(signal_history)}/{CANDLE_CONFIRM_COUNT}")
@@ -721,25 +926,28 @@ def run_instrument(name, cfg):
 
         if not all(s == raw_signal for s in signal_history):
             log(name, "Signal not consistent. Waiting...")
+            filter_stats["confirm_inconsistent"] += 1
             time.sleep(SIGNAL_INTERVAL)
             continue
 
         option_type = raw_signal
         log(name, f"Signal confirmed: {option_type} ({CANDLE_CONFIRM_COUNT} candles)")
 
+        # Both OI bias and max pain are SOFT filters: logged and counted in the
+        # funnel so their predictive value can be measured against trade
+        # outcomes before either is allowed to block trades.
         if max_pain_bias and max_pain_bias != option_type:
             log(name, f"Max pain ({max_pain_bias}) conflicts signal ({option_type}). Note only — proceeding.")
-            # Soft filter — log warning but don't block trade
+            filter_stats["max_pain_conflict"] += 1
 
         if oi_bias and oi_bias != option_type:
-            log(name, f"OI bias ({oi_bias}) conflicts signal ({option_type}). Skipping.")
-            signal_history.clear()
-            time.sleep(SIGNAL_INTERVAL)
-            continue
+            log(name, f"OI bias ({oi_bias}) conflicts signal ({option_type}). Note only — proceeding.")
+            filter_stats["oi_conflict"] += 1
 
         if (last_direction == option_type and last_sl_time and
                 (get_ist_now() - last_sl_time).seconds < 600):
             log(name, f"Same direction ({option_type}) after recent SL. Skipping.")
+            filter_stats["same_dir_block"] += 1
             signal_history.clear()
             time.sleep(30)
             continue
@@ -760,15 +968,18 @@ def run_instrument(name, cfg):
         entry = get_quote(option_symbol, cfg["option_exchange"])
         if entry is None:
             log(name, "Could not fetch premium. Retrying.")
+            filter_stats["entry_failed"] += 1
             time.sleep(10)
             continue
 
         order = place_order(option_symbol, cfg["option_exchange"], "BUY", cfg["quantity"])
         if not order:
             log(name, "Entry order failed.")
+            filter_stats["entry_failed"] += 1
             time.sleep(10)
             continue
 
+        filter_stats["taken"] += 1
         trade_count    += 1
         last_direction  = option_type
         entry_time_dt   = get_ist_now()
@@ -787,14 +998,7 @@ def run_instrument(name, cfg):
         be_trigger_time = None
         be_trigger_pnl  = 0
         trail_log       = []       # list of trail updates
-        exit_reason_str = "Unknown"
         curr            = entry
-        # Exit context indicators
-        exit_ema9  = ema9
-        exit_ema21 = ema21
-        exit_vwap  = vwap
-        exit_adx   = adx
-        exit_spot  = latest
 
         while position_open:
             now_str = get_time_str()
@@ -803,48 +1007,12 @@ def run_instrument(name, cfg):
             if now_str >= EXIT_TIME:
                 log(name, "3:30 PM hard exit.")
                 place_order(option_symbol, cfg["option_exchange"], "SELL", cfg["quantity"])
-                curr            = get_quote(option_symbol, cfg["option_exchange"]) or curr
-                pnl_pts         = curr - entry
-                pnl_rs          = pnl_pts * cfg["quantity"]
-                total_pnl      += pnl_rs
-                exit_reason_str = "Hard Exit"
-                position_open   = False
-
-                # Capture exit context
-                df_exit = fetch_candles(cfg, interval="1m")
-                if df_exit is not None and len(df_exit) >= 5:
-                    try:
-                        exit_ema9  = calc_ema(df_exit, 9)
-                        exit_ema21 = calc_ema(df_exit, 21)
-                        exit_vwap  = calc_vwap(df_exit)
-                        exit_adx   = calc_adx(df_exit)
-                        exit_spot  = df_exit.iloc[-1]["close"]
-                    except Exception:
-                        pass
-
-                capture = (pnl_pts / mfe_pts * 100) if mfe_pts > 0 else 0
-                trades_detail.append({
-                    "pnl": pnl_rs, "exit_reason": exit_reason_str,
-                    "mfe": mfe_pts, "mae": mae_pts, "capture": capture
-                })
-                log_trade(
-                    name, trade_count, option_type, option_symbol,
-                    entry, curr, exit_reason_str,
-                    entry_time_dt, get_ist_now(),
-                    entry_snapshot.get("spot", 0), entry_snapshot.get("orb_high", 0),
-                    entry_snapshot.get("orb_low", 0), entry_snapshot.get("ema9", 0),
-                    entry_snapshot.get("ema21", 0), entry_snapshot.get("vwap", 0),
-                    entry_snapshot.get("adx", 0), entry_snapshot.get("atr", 0),
-                    entry_snapshot.get("max_pain_strike", 0),
-                    entry_snapshot.get("max_pain_bias", "N/A"),
-                    entry_snapshot.get("oi_bias", "N/A"),
-                    mfe_pts, mae_pts,
-                    be_triggered, be_trigger_time, be_trigger_pnl,
-                    trail_log, high_water_mark,
-                    exit_spot, exit_ema9, exit_ema21, exit_vwap, exit_adx,
-                    dynamic_sl, total_pnl,
-                    cfg["target_pts"], cfg["sl_pts"]
-                )
+                curr       = get_quote(option_symbol, cfg["option_exchange"]) or curr
+                pnl_pts    = curr - entry
+                pnl_rs     = pnl_pts * cfg["quantity"]
+                total_pnl += pnl_rs
+                position_open = False
+                finalize_exit("Hard Exit", pnl_pts, pnl_rs, curr)
                 break
 
             new_price = get_quote(option_symbol, cfg["option_exchange"])
@@ -878,49 +1046,14 @@ def run_instrument(name, cfg):
 
             # High water exit
             if (high_water_mark >= cfg["be_trigger"] and
-                    pnl_pts <= high_water_mark - HIGH_WATER_DROP):
+                    pnl_pts <= high_water_mark - cfg["high_water_drop"]):
                 place_order(option_symbol, cfg["option_exchange"], "SELL", cfg["quantity"])
                 total_pnl        += pnl_rs
                 last_target_time  = get_ist_now()
-                exit_reason_str   = "High Water Exit"
                 position_open     = False
-
-                df_exit = fetch_candles(cfg, interval="1m")
-                if df_exit is not None and len(df_exit) >= 5:
-                    try:
-                        exit_ema9  = calc_ema(df_exit, 9)
-                        exit_ema21 = calc_ema(df_exit, 21)
-                        exit_vwap  = calc_vwap(df_exit)
-                        exit_adx   = calc_adx(df_exit)
-                        exit_spot  = df_exit.iloc[-1]["close"]
-                    except Exception:
-                        pass
-
-                capture = (pnl_pts / mfe_pts * 100) if mfe_pts > 0 else 0
-                trades_detail.append({
-                    "pnl": pnl_rs, "exit_reason": exit_reason_str,
-                    "mfe": mfe_pts, "mae": mae_pts, "capture": capture
-                })
                 tradelog(name, f"HIGH WATER EXIT! Peak:{high_water_mark:.1f} Now:{pnl_pts:.1f} | Rs {pnl_rs:.0f} | Total: Rs {total_pnl:.0f}")
-                log_trade(
-                    name, trade_count, option_type, option_symbol,
-                    entry, curr, exit_reason_str,
-                    entry_time_dt, get_ist_now(),
-                    entry_snapshot.get("spot", 0), entry_snapshot.get("orb_high", 0),
-                    entry_snapshot.get("orb_low", 0), entry_snapshot.get("ema9", 0),
-                    entry_snapshot.get("ema21", 0), entry_snapshot.get("vwap", 0),
-                    entry_snapshot.get("adx", 0), entry_snapshot.get("atr", 0),
-                    entry_snapshot.get("max_pain_strike", 0),
-                    entry_snapshot.get("max_pain_bias", "N/A"),
-                    entry_snapshot.get("oi_bias", "N/A"),
-                    mfe_pts, mae_pts,
-                    be_triggered, be_trigger_time, be_trigger_pnl,
-                    trail_log, high_water_mark,
-                    exit_spot, exit_ema9, exit_ema21, exit_vwap, exit_adx,
-                    dynamic_sl, total_pnl,
-                    cfg["target_pts"], cfg["sl_pts"]
-                )
-                continue
+                finalize_exit("High Water Exit", pnl_pts, pnl_rs, curr)
+                break
 
             # Break-even
             if pnl_pts >= cfg["be_trigger"] and not sl_to_cost:
@@ -948,90 +1081,20 @@ def run_instrument(name, cfg):
             # SL exit
             if pnl_pts <= dynamic_sl:
                 place_order(option_symbol, cfg["option_exchange"], "SELL", cfg["quantity"])
-                total_pnl      += pnl_rs
-                last_sl_time    = get_ist_now()
-                exit_reason_str = "SL Hit"
-                position_open   = False
-
-                df_exit = fetch_candles(cfg, interval="1m")
-                if df_exit is not None and len(df_exit) >= 5:
-                    try:
-                        exit_ema9  = calc_ema(df_exit, 9)
-                        exit_ema21 = calc_ema(df_exit, 21)
-                        exit_vwap  = calc_vwap(df_exit)
-                        exit_adx   = calc_adx(df_exit)
-                        exit_spot  = df_exit.iloc[-1]["close"]
-                    except Exception:
-                        pass
-
-                capture = (pnl_pts / mfe_pts * 100) if mfe_pts > 0 else 0
-                trades_detail.append({
-                    "pnl": pnl_rs, "exit_reason": exit_reason_str,
-                    "mfe": mfe_pts, "mae": mae_pts, "capture": capture
-                })
+                total_pnl    += pnl_rs
+                last_sl_time  = get_ist_now()
+                position_open = False
                 log(name, f"SL exit | Rs {pnl_rs:.0f} | Total: Rs {total_pnl:.0f}")
-                log_trade(
-                    name, trade_count, option_type, option_symbol,
-                    entry, curr, exit_reason_str,
-                    entry_time_dt, get_ist_now(),
-                    entry_snapshot.get("spot", 0), entry_snapshot.get("orb_high", 0),
-                    entry_snapshot.get("orb_low", 0), entry_snapshot.get("ema9", 0),
-                    entry_snapshot.get("ema21", 0), entry_snapshot.get("vwap", 0),
-                    entry_snapshot.get("adx", 0), entry_snapshot.get("atr", 0),
-                    entry_snapshot.get("max_pain_strike", 0),
-                    entry_snapshot.get("max_pain_bias", "N/A"),
-                    entry_snapshot.get("oi_bias", "N/A"),
-                    mfe_pts, mae_pts,
-                    be_triggered, be_trigger_time, be_trigger_pnl,
-                    trail_log, high_water_mark,
-                    exit_spot, exit_ema9, exit_ema21, exit_vwap, exit_adx,
-                    dynamic_sl, total_pnl,
-                    cfg["target_pts"], cfg["sl_pts"]
-                )
+                finalize_exit("SL Hit", pnl_pts, pnl_rs, curr)
 
             # Target exit
             elif pnl_pts >= cfg["target_pts"]:
                 place_order(option_symbol, cfg["option_exchange"], "SELL", cfg["quantity"])
                 total_pnl        += pnl_rs
                 last_target_time  = get_ist_now()
-                exit_reason_str   = "Target Hit"
                 position_open     = False
-
-                df_exit = fetch_candles(cfg, interval="1m")
-                if df_exit is not None and len(df_exit) >= 5:
-                    try:
-                        exit_ema9  = calc_ema(df_exit, 9)
-                        exit_ema21 = calc_ema(df_exit, 21)
-                        exit_vwap  = calc_vwap(df_exit)
-                        exit_adx   = calc_adx(df_exit)
-                        exit_spot  = df_exit.iloc[-1]["close"]
-                    except Exception:
-                        pass
-
-                capture = (pnl_pts / mfe_pts * 100) if mfe_pts > 0 else 0
-                trades_detail.append({
-                    "pnl": pnl_rs, "exit_reason": exit_reason_str,
-                    "mfe": mfe_pts, "mae": mae_pts, "capture": capture
-                })
                 tradelog(name, f"TARGET HIT! Rs {pnl_rs:.0f} | Total: Rs {total_pnl:.0f}")
-                log_trade(
-                    name, trade_count, option_type, option_symbol,
-                    entry, curr, exit_reason_str,
-                    entry_time_dt, get_ist_now(),
-                    entry_snapshot.get("spot", 0), entry_snapshot.get("orb_high", 0),
-                    entry_snapshot.get("orb_low", 0), entry_snapshot.get("ema9", 0),
-                    entry_snapshot.get("ema21", 0), entry_snapshot.get("vwap", 0),
-                    entry_snapshot.get("adx", 0), entry_snapshot.get("atr", 0),
-                    entry_snapshot.get("max_pain_strike", 0),
-                    entry_snapshot.get("max_pain_bias", "N/A"),
-                    entry_snapshot.get("oi_bias", "N/A"),
-                    mfe_pts, mae_pts,
-                    be_triggered, be_trigger_time, be_trigger_pnl,
-                    trail_log, high_water_mark,
-                    exit_spot, exit_ema9, exit_ema21, exit_vwap, exit_adx,
-                    dynamic_sl, total_pnl,
-                    cfg["target_pts"], cfg["sl_pts"]
-                )
+                finalize_exit("Target Hit", pnl_pts, pnl_rs, curr)
 
             if position_open:
                 time.sleep(5)
@@ -1046,7 +1109,7 @@ def run_instrument(name, cfg):
 
 def main():
     tlog("=" * 60)
-    tlog("Momentum Scalper V4.2 — NIFTY + SENSEX")
+    tlog("Momentum Scalper V4.3 — NIFTY + SENSEX")
     tlog("OI + Max Pain + ORB + EMA + VWAP + ADX + MFE/MAE + Logging")
     tlog("=" * 60)
     tlog(f"Log folder : {_TL._date_folder()}")

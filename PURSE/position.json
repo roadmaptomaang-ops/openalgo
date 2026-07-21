@@ -1,0 +1,26 @@
+{
+  "instrument": "SENSEX",
+  "option_exchange": "BFO",
+  "direction": "PE",
+  "symbol": "SENSEX23JUL2677400PE",
+  "strike": 77400,
+  "lot": 20,
+  "entry": 339.3,
+  "entry_time": "2026-07-21T11:44:10.753189+05:30",
+  "cost_rs": 6841.0,
+  "stop_pts": 60.0,
+  "r_rs": 1200.0,
+  "peak_pts": 6.949999999999989,
+  "mae_pts": -44.30000000000001,
+  "stop_level": 279.3,
+  "armed": false,
+  "snap": {
+    "spot": 77418.81,
+    "orb_high": 77740.84,
+    "orb_low": 77541.68,
+    "ema9": 77445.34030786059,
+    "ema21": 77460.66690463467,
+    "adx": 21.333682362856756,
+    "efficiency": 0.7961033609982957
+  }
+}

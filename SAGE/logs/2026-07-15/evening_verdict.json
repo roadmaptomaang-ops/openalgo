@@ -1,0 +1,23 @@
+{
+  "date": "2026-07-15",
+  "status": "PARTIAL",
+  "hypothesis_correct": 0,
+  "regime_predicted": "VOLATILE",
+  "regime_actual": "MIXED",
+  "regime_correct": false,
+  "direction_predicted": "NEUTRAL",
+  "direction_actual": "CE",
+  "direction_correct": true,
+  "pnl_predicted_low": -1500.0,
+  "pnl_predicted_high": 1500.0,
+  "actual_pnl": -273.0,
+  "pnl_in_range": true,
+  "actual_trades": 22,
+  "actual_win_rate": 0.364,
+  "notes": [
+    "Predicted VOLATILE \u2192 Actual MIXED (\u2717)",
+    "Predicted bias NEUTRAL \u2192 Actual CE (\u2713)",
+    "P&L range \u20b9-1,500\u2013\u20b91,500 \u2192 Actual \u20b9-273 (IN RANGE)"
+  ],
+  "sage_score": 0.6
+}

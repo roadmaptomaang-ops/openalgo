@@ -1,0 +1,24 @@
+{
+  "date": "2026-06-23",
+  "regime": "MIXED",
+  "direction_bias": "CE",
+  "pnl_low": -259.0,
+  "pnl_high": 566.0,
+  "confidence": 0.22,
+  "similar_days": 6,
+  "patterns_matched": [],
+  "rules": {
+    "entry_window": "09:20 \u2013 14:30",
+    "adx_floor": 22,
+    "max_trades": 4,
+    "direction": "CE"
+  },
+  "reasoning": [
+    "5-day win rate is 46.7% \u2192 under pressure",
+    "Previous day P&L: \u20b90 (profit)",
+    "Regime classified as MIXED (avg ADX 52.6, matched 6 similar past days)",
+    "On past MIXED days: avg P&L \u20b9151, direction bias CE"
+  ],
+  "sage_recommendation": "NORMAL \u2014 mixed day, follow standard rules",
+  "recent_5d_wr": 0.4666666666666667
+}

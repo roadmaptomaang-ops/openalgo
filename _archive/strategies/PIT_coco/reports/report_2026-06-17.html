@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenAlgo Research Platform — 2026-06-17</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+  :root {
+    --bg:#0a0c0e;--bg1:#0d1014;--bg2:#111518;--bg3:#161b1f;
+    --border:#1e2428;--border2:#252c32;--dim:#3a4450;--muted:#5a6a78;
+    --text:#c8d4dc;--text-hi:#e8f0f4;--label:#7a8c98;
+    --green:#00c87a;--green-dim:#00441a;--red:#e8374a;--red-dim:#3d0a10;
+    --yellow:#e8b84a;--yellow-dim:#3d2c00;--cyan:#4ab8d8;--cyan-dim:#0a2030;
+    --orange:#e88040;--accent:#1e6fa8;
+    --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:12px;line-height:1.5;min-height:100vh}
+  .hdr{background:var(--bg1);border-bottom:1px solid var(--border2);padding:10px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+  .logo{font-size:13px;font-weight:700;letter-spacing:.12em;color:var(--text-hi);text-transform:uppercase}
+  .logo span{color:var(--cyan)}
+  .hdr-meta{font-size:11px;color:var(--muted);letter-spacing:.04em}
+  .status-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);margin-right:6px}
+  .page{max-width:1400px;margin:0 auto;padding:16px 24px 64px}
+  .date-bar{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);margin-bottom:16px}
+  .date-label{font-size:18px;font-weight:600;color:var(--text-hi);letter-spacing:.04em}
+  .date-sub{font-size:11px;color:var(--muted);margin-top:2px}
+  .grade-box{font-size:28px;font-weight:700;width:52px;height:52px;display:flex;align-items:center;justify-content:center;border:2px solid #5a6a78;color:#5a6a78}
+  .sec{margin-top:20px;margin-bottom:8px}
+  .sec-hdr{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);padding-bottom:6px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+  .sec-hdr::before{content:'▪';color:var(--cyan)}
+  /* Summary grid */
+  .sg{display:grid;grid-template-columns:repeat(8,1fr);gap:1px;background:var(--border);border:1px solid var(--border);margin-top:8px}
+  .sc{background:var(--bg2);padding:12px 14px}
+  .sc:hover{background:var(--bg3)}
+  .sc-lbl{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+  .sc-val{font-size:18px;font-weight:600;color:var(--text-hi);line-height:1.2}
+  .sc-val.pos{color:var(--green)} .sc-val.neg{color:var(--red)} .sc-val.warn{color:var(--yellow)}
+  .sc-sub{font-size:9px;color:var(--muted);margin-top:3px}
+  /* Two col */
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:1px;margin-top:8px}
+  .three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;margin-top:8px}
+  /* Panel */
+  .panel{background:var(--bg2);border:1px solid var(--border);padding:16px}
+  .panel-title{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+  /* Stat rows */
+  .stat-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)}
+  .stat-row:last-child{border-bottom:none}
+  .stat-key{color:var(--muted);font-size:11px}
+  .stat-val{font-size:11px;color:var(--text-hi)}
+  .stat-val.pos{color:var(--green)} .stat-val.neg{color:var(--red)} .stat-val.warn{color:var(--yellow)}
+  /* Trade table */
+  .tbl{width:100%;border-collapse:collapse;margin-top:8px;font-size:11px}
+  .tbl th{background:var(--bg1);color:var(--muted);font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:6px 10px;text-align:left;border-bottom:1px solid var(--border2)}
+  .tbl td{padding:5px 10px;border-bottom:1px solid var(--border);color:var(--text)}
+  .tbl tr:hover td{background:var(--bg3)}
+  .td-pos{color:var(--green)} .td-neg{color:var(--red)} .td-warn{color:var(--yellow)} .td-dim{color:var(--muted)} .td-hi{color:var(--text-hi)}
+  /* Pills */
+  .pill{font-size:9px;letter-spacing:.06em;padding:2px 7px;text-transform:uppercase;font-weight:600}
+  .pill-ce{background:rgba(0,200,122,.15);color:var(--green);border:1px solid var(--green-dim)}
+  .pill-pe{background:rgba(232,55,74,.15);color:var(--red);border:1px solid var(--red-dim)}
+  .pill-buy{background:rgba(74,184,216,.15);color:var(--cyan);border:1px solid var(--cyan-dim)}
+  .pill-target{background:rgba(0,200,122,.15);color:var(--green)}
+  .pill-sl{background:rgba(232,55,74,.15);color:var(--red)}
+  .pill-trail{background:rgba(74,184,216,.15);color:var(--cyan)}
+  .pill-hw{background:rgba(232,184,74,.15);color:var(--yellow)}
+  .pill-nm{background:rgba(232,128,64,.15);color:var(--orange)}
+  .pill-time{background:rgba(90,106,120,.15);color:var(--muted)}
+  .pill-manual{background:rgba(90,106,120,.15);color:var(--muted)}
+  /* Verdict */
+  .verdict{font-size:9px;font-weight:700;letter-spacing:.08em;padding:2px 8px;text-transform:uppercase}
+  .verdict-adopt{background:rgba(0,200,122,.2);color:var(--green);border:1px solid var(--green)}
+  .verdict-test{background:rgba(232,184,74,.2);color:var(--yellow);border:1px solid var(--yellow)}
+  .verdict-skip{background:rgba(90,106,120,.15);color:var(--muted);border:1px solid var(--border2)}
+  /* Flag */
+  .flag{font-size:9px;font-weight:700;letter-spacing:.1em;padding:2px 8px;text-transform:uppercase}
+  .flag-ok{color:var(--green);border:1px solid var(--green)}
+  .flag-warn{color:var(--yellow);border:1px solid var(--yellow)}
+  .flag-alert{color:var(--red);border:1px solid var(--red)}
+  .flag-dim{color:var(--muted);border:1px solid var(--border2)}
+  /* Decay window cards */
+  .decay-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);margin-top:8px}
+  .decay-card{background:var(--bg2);padding:14px}
+  .decay-period{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+  /* Cause bars */
+  .cause-row{display:flex;align-items:center;gap:12px;padding:6px 0;border-bottom:1px solid var(--border)}
+  .cause-label{width:240px;font-size:11px;color:var(--text)}
+  .cause-bar-track{flex:1;height:4px;background:var(--border2)}
+  .cause-bar-fill{height:100%;background:var(--red)}
+  .cause-count{width:30px;text-align:right;font-size:11px;color:var(--muted)}
+  .cause-pnl{width:90px;text-align:right;font-size:11px;color:var(--red)}
+  /* Equity canvas */
+  .tbl th[data-col]:hover{color:var(--cyan)}
+  .tbl th.sort-asc::after{content:' ↑';color:var(--cyan)}
+  .tbl th.sort-desc::after{content:' ↓';color:var(--cyan)}
+  select:focus,input:focus{outline:1px solid var(--cyan)}
+  .canvas-wrap{background:var(--bg2);border:1px solid var(--border);padding:16px;margin-top:8px}
+  /* Cooling grid */
+  .cool-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);margin-top:8px}
+  .cool-card{background:var(--bg2);padding:12px 14px}
+  .cool-trigger{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--cyan);margin-bottom:6px}
+  /* Coach */
+  .coach-section{background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--cyan);padding:16px;margin-top:8px}
+  .coach-row{padding:6px 0;border-bottom:1px solid var(--border);display:flex;gap:12px}
+  .coach-label{width:200px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);flex-shrink:0}
+  .coach-text{font-size:11px;color:var(--text-hi)}
+  /* Whatif table */
+  .wi-row{display:grid;grid-template-columns:3fr 80px 140px 110px 100px;gap:0;padding:6px 12px;border-bottom:1px solid var(--border)}
+  .wi-row:hover{background:var(--bg3)}
+  .wi-hdr{display:grid;grid-template-columns:3fr 80px 140px 110px 100px;padding:6px 12px;background:var(--bg1);font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border2)}
+  .wi-filter{font-size:11px;color:var(--text)}
+  .wi-cell{font-size:11px;text-align:right;color:var(--text-hi)}
+  /* Status badge */
+  .status-badge{display:inline-flex;align-items:center;gap:6px;font-size:10px;padding:4px 12px;border:1px solid;letter-spacing:.08em;text-transform:uppercase}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="logo">OPEN<span>ALGO</span> &nbsp;·&nbsp; Research Platform</div>
+  <div class="hdr-meta">
+    <span class="status-dot"></span>
+    2026-06-17 &nbsp;·&nbsp; Generated 16:29 IST
+    
+  </div>
+</div>
+
+<div class="page">
+
+<!-- DATE BAR -->
+<div class="date-bar">
+  <div>
+    <div class="date-label">2026-06-17</div>
+    <div class="date-sub">2 trades &nbsp;·&nbsp; 0W 2L &nbsp;·&nbsp; Streak: 2L</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:16px">
+    <div class="status-badge flag-alert">Edge: ALERT</div>
+    <div class="grade-box">N/A</div>
+  </div>
+</div>
+
+<!-- CEO SUMMARY -->
+<div class="sec"><div class="sec-hdr">Executive Summary</div></div>
+<div class="sg">
+  <div class="sc">
+    <div class="sc-lbl">Net P&amp;L</div>
+    <div class="sc-val neg">-₹425</div>
+    <div class="sc-sub">Gross ++₹0 / -₹425</div>
+  </div>
+  <div class="sc">
+    <div class="sc-lbl">Win Rate</div>
+    <div class="sc-val neg">0.0%</div>
+    <div class="sc-sub">0W / 2L</div>
+  </div>
+  <div class="sc">
+    <div class="sc-lbl">Profit Factor</div>
+    <div class="sc-val neg">0.00</div>
+    <div class="sc-sub">≥1.5 = good</div>
+  </div>
+  <div class="sc">
+    <div class="sc-lbl">Expectancy</div>
+    <div class="sc-val neg">-₹212</div>
+    <div class="sc-sub">per trade avg</div>
+  </div>
+  <div class="sc">
+    <div class="sc-lbl">Max Drawdown</div>
+    <div class="sc-val neg">-₹425</div>
+    <div class="sc-sub">peak to trough</div>
+  </div>
+  <div class="sc">
+    <div class="sc-lbl">Avg MFE</div>
+    <div class="sc-val">0.4 pts</div>
+    <div class="sc-sub">Avg capture: 0%</div>
+  </div>
+  <div class="sc">
+    <div class="sc-lbl">Best Instrument</div>
+    <div class="sc-val" style="font-size:14px">EQUITY</div>
+    <div class="sc-sub">by net P&amp;L</div>
+  </div>
+  <div class="sc">
+    <div class="sc-lbl">Top Failure</div>
+    <div class="sc-val warn" style="font-size:11px">Premature Entry / </div>
+    <div class="sc-sub">primary loss cause</div>
+  </div>
+</div>
+
+<!-- EQUITY CURVE -->
+<div class="sec"><div class="sec-hdr">Equity Curve</div></div>
+<div class="canvas-wrap"><canvas id="equity-canvas" height="160"></canvas></div>
+
+<!-- EDGE DECAY -->
+
+<div class="sec"><div class="sec-hdr">Edge Decay Detector
+  <span style="margin-left:auto;font-size:10px"><span style="margin-right:16px;font-size:11px">Win Rate: <span class="td-dim">→ FLAT</span></span><span style="margin-right:16px;font-size:11px">Profit Factor: <span class="td-neg">↓ DETERIORATING</span></span><span style="margin-right:16px;font-size:11px">Expectancy: <span class="td-pos">↑ IMPROVING</span></span></span>
+</div></div>
+<div class="decay-grid">
+        <div class="decay-card">
+          <div class="decay-period">7D &nbsp;<span class="flag flag-alert">ALERT</span></div>
+          <div class="stat-row"><span class="stat-key">Trades</span><span class="stat-val">58</span></div>
+          <div class="stat-row"><span class="stat-key">Win Rate</span><span class="stat-val neg">43.1%</span></div>
+          <div class="stat-row"><span class="stat-key">Profit Factor</span><span class="stat-val pos">1.05</span></div>
+          <div class="stat-row"><span class="stat-key">Expectancy</span><span class="stat-val pos">₹9</span></div>
+          <div class="stat-row"><span class="stat-key">Grade</span><span class="stat-val">C</span></div>
+          <div style="margin-top:8px;font-size:9px;color:var(--muted)">Profit factor dropped 0.33 vs baseline</div>
+        </div>
+        <div class="decay-card">
+          <div class="decay-period">14D &nbsp;<span class="flag flag-ok">OK</span></div>
+          <div class="stat-row"><span class="stat-key">Trades</span><span class="stat-val">136</span></div>
+          <div class="stat-row"><span class="stat-key">Win Rate</span><span class="stat-val neg">47.1%</span></div>
+          <div class="stat-row"><span class="stat-key">Profit Factor</span><span class="stat-val pos">1.43</span></div>
+          <div class="stat-row"><span class="stat-key">Expectancy</span><span class="stat-val pos">₹76</span></div>
+          <div class="stat-row"><span class="stat-key">Grade</span><span class="stat-val">C</span></div>
+          <div style="margin-top:8px;font-size:9px;color:var(--muted)">All metrics within normal range</div>
+        </div>
+        <div class="decay-card">
+          <div class="decay-period">30D &nbsp;<span class="flag flag-ok">OK</span></div>
+          <div class="stat-row"><span class="stat-key">Trades</span><span class="stat-val">141</span></div>
+          <div class="stat-row"><span class="stat-key">Win Rate</span><span class="stat-val neg">46.8%</span></div>
+          <div class="stat-row"><span class="stat-key">Profit Factor</span><span class="stat-val pos">1.38</span></div>
+          <div class="stat-row"><span class="stat-key">Expectancy</span><span class="stat-val pos">₹71</span></div>
+          <div class="stat-row"><span class="stat-key">Grade</span><span class="stat-val">C</span></div>
+          <div style="margin-top:8px;font-size:9px;color:var(--muted)">All metrics within normal range</div>
+        </div>
+        <div class="decay-card">
+          <div class="decay-period">ALL &nbsp;<span class="flag flag-dim">BASELINE</span></div>
+          <div class="stat-row"><span class="stat-key">Trades</span><span class="stat-val">141</span></div>
+          <div class="stat-row"><span class="stat-key">Win Rate</span><span class="stat-val neg">46.8%</span></div>
+          <div class="stat-row"><span class="stat-key">Profit Factor</span><span class="stat-val pos">1.38</span></div>
+          <div class="stat-row"><span class="stat-key">Expectancy</span><span class="stat-val pos">₹71</span></div>
+          <div class="stat-row"><span class="stat-key">Grade</span><span class="stat-val">C</span></div>
+          <div style="margin-top:8px;font-size:9px;color:var(--muted)">Baseline reference</div>
+        </div></div>
+<div style="margin-top:8px;background:var(--bg2);border:1px solid var(--border);padding:12px">
+  <div style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Daily Breakdown (last 7 days)</div>
+  <table class="tbl">
+    <thead><tr><th>Date</th><th>Trades</th><th>Win%</th><th>PF</th><th>Net</th></tr></thead>
+    <tbody><tr>
+          <td class="td-dim">2026-06-09</td>
+          <td>10</td>
+          <td class="td-pos">60.0%</td>
+          <td class="td-pos">2.61</td>
+          <td class="td-pos">+₹1,651</td>
+        </tr><tr>
+          <td class="td-dim">2026-06-10</td>
+          <td>15</td>
+          <td class="td-neg">33.3%</td>
+          <td class="td-neg">0.68</td>
+          <td class="td-neg">₹1,276</td>
+        </tr><tr>
+          <td class="td-dim">2026-06-11</td>
+          <td>17</td>
+          <td class="td-neg">35.3%</td>
+          <td class="td-pos">1.28</td>
+          <td class="td-pos">+₹785</td>
+        </tr><tr>
+          <td class="td-dim">2026-06-12</td>
+          <td>15</td>
+          <td class="td-pos">53.3%</td>
+          <td class="td-pos">1.52</td>
+          <td class="td-pos">+₹1,244</td>
+        </tr><tr>
+          <td class="td-dim">2026-06-15</td>
+          <td>2</td>
+          <td class="td-pos">100.0%</td>
+          <td class="td-neg">None</td>
+          <td class="td-pos">+₹1,244</td>
+        </tr><tr>
+          <td class="td-dim">2026-06-16</td>
+          <td>7</td>
+          <td class="td-pos">57.1%</td>
+          <td class="td-neg">0.32</td>
+          <td class="td-neg">₹1,059</td>
+        </tr><tr>
+          <td class="td-dim">2026-06-17</td>
+          <td>2</td>
+          <td class="td-neg">None%</td>
+          <td class="td-neg">None</td>
+          <td class="td-neg">₹425</td>
+        </tr></tbody>
+  </table>
+  <div style="margin-top:10px;font-size:11px;color:var(--muted)">
+    Max win streak: <span style="color:var(--green)">10W</span> &nbsp;·&nbsp;
+    Max loss streak: <span style="color:var(--red)">10L</span> &nbsp;·&nbsp;
+    Current: <span style="color:var(--cyan)">3L</span>
+  </div>
+</div>
+
+<!-- LOSS AUTOPSY -->
+
+<div class="sec"><div class="sec-hdr">Loss Autopsy Engine
+  <span class="td-dim" style="margin-left:auto;font-size:10px">2 losses analysed · 100% classified</span>
+</div></div>
+<div class="two-col">
+  <div style="background:var(--bg2);border:1px solid var(--border);padding:14px">
+    <div class="panel-title">Failure Cause Ranking</div>
+    
+        <div class="cause-row">
+          <div class="cause-label">Premature Entry / Quick Reversal</div>
+          <div style="font-size:9px;width:60px;color:var(--muted)">behavioral</div>
+          <div class="cause-bar-track"><div class="cause-bar-fill" style="width:100%"></div></div>
+          <div class="cause-count">1</div>
+          <div class="cause-pnl">₹409</div>
+        </div>
+        <div class="cause-row">
+          <div class="cause-label">Weak Session Time Window</div>
+          <div style="font-size:9px;width:60px;color:var(--muted)">behavioral</div>
+          <div class="cause-bar-track"><div class="cause-bar-fill" style="width:4%"></div></div>
+          <div class="cause-count">1</div>
+          <div class="cause-pnl">₹16</div>
+        </div>
+    <div style="margin-top:12px;display:flex;gap:24px;font-size:11px">
+      <span>Behavioral: <span class="td-warn">₹425 (2 trades)</span></span>
+      <span>System: <span class="td-neg">₹0 (0 trades)</span></span>
+    </div>
+  </div>
+  <div style="background:var(--bg2);border:1px solid var(--border);padding:14px">
+    <div class="panel-title">ADX Performance Matrix</div>
+    <table class="tbl"><thead><tr><th>ADX</th><th>Trades</th><th>WR%</th><th>PF</th><th>Net</th></tr></thead>
+    <tbody><tr>
+          <td class="td-dim">25–30</td>
+          <td>1</td>
+          <td class="td-neg">0%</td>
+          <td class="td-neg">None</td>
+          <td class="td-neg">₹409</td>
+        </tr><tr>
+          <td class="td-dim">30–40</td>
+          <td>1</td>
+          <td class="td-neg">0%</td>
+          <td class="td-neg">None</td>
+          <td class="td-neg">₹16</td>
+        </tr></tbody></table>
+    <div style="margin-top:14px">
+      <div class="panel-title">Loss by Time Bucket</div>
+      <table class="tbl"><thead><tr><th>Window</th><th>Losses</th><th>Total</th><th>Avg</th></tr></thead>
+      <tbody><tr>
+          <td class="td-dim">10:00–11:00</td>
+          <td>1</td>
+          <td class="td-neg">₹409</td>
+          <td class="td-neg">₹409</td>
+        </tr><tr>
+          <td class="td-dim">13:00–14:00</td>
+          <td>1</td>
+          <td class="td-neg">₹16</td>
+          <td class="td-neg">₹16</td>
+        </tr></tbody></table>
+    </div>
+  </div>
+</div>
+<div style="background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--yellow);padding:14px;margin-top:8px"><div class="panel-title">Recommendations</div>
+        <div style="padding:8px 0;border-bottom:1px solid var(--border)">
+          <div style="font-size:9px;color:var(--red);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px">HIGH PRIORITY — Add confirmation delay or secondary signal before entry</div>
+          <div style="font-size:11px;color:var(--muted)">1 losses from quick reversals (< 8 min hold).</div>
+        </div>
+        <div style="padding:8px 0;border-bottom:1px solid var(--border)">
+          <div style="font-size:9px;color:var(--yellow);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px">MEDIUM PRIORITY — Review execution discipline — majority of losses are behavioral</div>
+          <div style="font-size:11px;color:var(--muted)">2 behavioral losses (₹425) vs 0 system losses.</div>
+        </div></div>
+
+<!-- COOLING SIMULATOR -->
+
+<div class="sec"><div class="sec-hdr">Cooling Period Simulator</div></div>
+
+<div style="background:var(--bg2);border:1px solid var(--border);margin-top:8px">
+  <table class="tbl">
+    <thead><tr><th>Trigger</th><th>Cooldown</th><th>Removed</th><th>Sim P&L</th><th>Delta</th><th>Verdict</th></tr></thead>
+    <tbody><tr>
+          <td class="td-hi">After Stop Loss</td>
+          <td>5min</td>
+          <td>0</td>
+          <td class="td-neg">₹-425</td>
+          <td class="td-neg">+₹0</td>
+          <td><span class="verdict verdict-skip">SKIP</span></td>
+        </tr><tr>
+          <td class="td-hi">After Target / Trail</td>
+          <td>5min</td>
+          <td>0</td>
+          <td class="td-neg">₹-425</td>
+          <td class="td-neg">+₹0</td>
+          <td><span class="verdict verdict-skip">SKIP</span></td>
+        </tr><tr>
+          <td class="td-hi">After 2 Consecutive Losses</td>
+          <td>5min</td>
+          <td>0</td>
+          <td class="td-neg">₹-425</td>
+          <td class="td-neg">+₹0</td>
+          <td><span class="verdict verdict-skip">SKIP</span></td>
+        </tr><tr>
+          <td class="td-hi">After 3 Consecutive Losses</td>
+          <td>5min</td>
+          <td>0</td>
+          <td class="td-neg">₹-425</td>
+          <td class="td-neg">+₹0</td>
+          <td><span class="verdict verdict-skip">SKIP</span></td>
+        </tr></tbody>
+  </table>
+</div>
+
+<!-- WHAT-IF -->
+
+<div class="sec"><div class="sec-hdr">What-If Research Engine
+  <span class="td-dim" style="margin-left:auto;font-size:10px">
+    <span class="td-pos">0 ADOPT</span> &nbsp;·&nbsp;
+    <span class="td-warn">0 TEST</span>
+  </span>
+</div></div>
+<div style="background:var(--bg2);border:1px solid var(--border)">
+  <div class="wi-hdr">
+    <div>Filter</div><div style="text-align:right">Removed</div>
+    <div style="text-align:right">Sim P&L</div>
+    <div style="text-align:right">Delta</div>
+    <div style="text-align:right;padding-right:12px">Verdict</div>
+  </div>
+  
+        <div class="wi-row">
+          <div class="wi-filter">Score ≥ 85</div>
+          <div class="wi-cell td-dim">2</div>
+          <div class="wi-cell td-pos">₹0</div>
+          <div class="wi-cell td-pos">+₹425</div>
+          <div class="wi-cell" style="text-align:right;padding-right:12px"><span class="verdict verdict-skip">SKIP</span></div>
+        </div>
+        <div class="wi-row">
+          <div class="wi-filter">Score ≥ 88</div>
+          <div class="wi-cell td-dim">2</div>
+          <div class="wi-cell td-pos">₹0</div>
+          <div class="wi-cell td-pos">+₹425</div>
+          <div class="wi-cell" style="text-align:right;padding-right:12px"><span class="verdict verdict-skip">SKIP</span></div>
+        </div>
+        <div class="wi-row">
+          <div class="wi-filter">Score ≥ 90</div>
+          <div class="wi-cell td-dim">2</div>
+          <div class="wi-cell td-pos">₹0</div>
+          <div class="wi-cell td-pos">+₹425</div>
+          <div class="wi-cell" style="text-align:right;padding-right:12px"><span class="verdict verdict-skip">SKIP</span></div>
+        </div>
+        <div class="wi-row">
+          <div class="wi-filter">Score ≥ 92</div>
+          <div class="wi-cell td-dim">2</div>
+          <div class="wi-cell td-pos">₹0</div>
+          <div class="wi-cell td-pos">+₹425</div>
+          <div class="wi-cell" style="text-align:right;padding-right:12px"><span class="verdict verdict-skip">SKIP</span></div>
+        </div>
+        <div class="wi-row">
+          <div class="wi-filter">ADX ≥ 28</div>
+          <div class="wi-cell td-dim">1</div>
+          <div class="wi-cell td-neg">₹-16</div>
+          <div class="wi-cell td-pos">+₹409</div>
+          <div class="wi-cell" style="text-align:right;padding-right:12px"><span class="verdict verdict-skip">SKIP</span></div>
+        </div>
+        <div class="wi-row">
+          <div class="wi-filter">ADX ≥ 30</div>
+          <div class="wi-cell td-dim">1</div>
+          <div class="wi-cell td-neg">₹-16</div>
+          <div class="wi-cell td-pos">+₹409</div>
+          <div class="wi-cell" style="text-align:right;padding-right:12px"><span class="verdict verdict-skip">SKIP</span></div>
+        </div>
+        <div class="wi-row">
+          <div class="wi-filter">Score ≥ 80</div>
+          <div class="wi-cell td-dim">1</div>
+          <div class="wi-cell td-neg">₹-16</div>
+          <div class="wi-cell td-pos">+₹409</div>
+          <div class="wi-cell" style="text-align:right;padding-right:12px"><span class="verdict verdict-skip">SKIP</span></div>
+        </div>
+        <div class="wi-row">
+          <div class="wi-filter">BUY only</div>
+          <div class="wi-cell td-dim">1</div>
+          <div class="wi-cell td-neg">₹-16</div>
+          <div class="wi-cell td-pos">+₹409</div>
+          <div class="wi-cell" style="text-align:right;padding-right:12px"><span class="verdict verdict-skip">SKIP</span></div>
+        </div>
+        <div class="wi-row">
+          <div class="wi-filter">Max 1 trade/day</div>
+          <div class="wi-cell td-dim">1</div>
+          <div class="wi-cell td-neg">₹-409</div>
+          <div class="wi-cell td-pos">+₹16</div>
+          <div class="wi-cell" style="text-align:right;padding-right:12px"><span class="verdict verdict-skip">SKIP</span></div>
+        </div>
+        <div class="wi-row">
+          <div class="wi-filter">Entry 09:20–11:00</div>
+          <div class="wi-cell td-dim">1</div>
+          <div class="wi-cell td-neg">₹-409</div>
+          <div class="wi-cell td-pos">+₹16</div>
+          <div class="wi-cell" style="text-align:right;padding-right:12px"><span class="verdict verdict-skip">SKIP</span></div>
+        </div>
+        <div class="wi-row">
+          <div class="wi-filter">Entry 09:20–11:30</div>
+          <div class="wi-cell td-dim">1</div>
+          <div class="wi-cell td-neg">₹-409</div>
+          <div class="wi-cell td-pos">+₹16</div>
+          <div class="wi-cell" style="text-align:right;padding-right:12px"><span class="verdict verdict-skip">SKIP</span></div>
+        </div>
+        <div class="wi-row">
+          <div class="wi-filter">Entry 09:20–12:00</div>
+          <div class="wi-cell td-dim">1</div>
+          <div class="wi-cell td-neg">₹-409</div>
+          <div class="wi-cell td-pos">+₹16</div>
+          <div class="wi-cell" style="text-align:right;padding-right:12px"><span class="verdict verdict-skip">SKIP</span></div>
+        </div>
+        <div class="wi-row">
+          <div class="wi-filter">CE only</div>
+          <div class="wi-cell td-dim">1</div>
+          <div class="wi-cell td-neg">₹-409</div>
+          <div class="wi-cell td-pos">+₹16</div>
+          <div class="wi-cell" style="text-align:right;padding-right:12px"><span class="verdict verdict-skip">SKIP</span></div>
+        </div>
+        <div class="wi-row">
+          <div class="wi-filter">ADX ≥ 20</div>
+          <div class="wi-cell td-dim">0</div>
+          <div class="wi-cell td-neg">₹-425</div>
+          <div class="wi-cell td-dim">+₹0</div>
+          <div class="wi-cell" style="text-align:right;padding-right:12px"><span class="verdict verdict-skip">SKIP</span></div>
+        </div>
+        <div class="wi-row">
+          <div class="wi-filter">ADX ≥ 22</div>
+          <div class="wi-cell td-dim">0</div>
+          <div class="wi-cell td-neg">₹-425</div>
+          <div class="wi-cell td-dim">+₹0</div>
+          <div class="wi-cell" style="text-align:right;padding-right:12px"><span class="verdict verdict-skip">SKIP</span></div>
+        </div>
+        <div class="wi-row">
+          <div class="wi-filter">ADX ≥ 25</div>
+          <div class="wi-cell td-dim">0</div>
+          <div class="wi-cell td-neg">₹-425</div>
+          <div class="wi-cell td-dim">+₹0</div>
+          <div class="wi-cell" style="text-align:right;padding-right:12px"><span class="verdict verdict-skip">SKIP</span></div>
+        </div>
+</div>
+
+<!-- STRATEGY COACH -->
+
+<div class="sec"><div class="sec-hdr">Strategy Coach</div></div>
+<div class="coach-section"><div class="coach-row"><div class="coach-label">Session Assessment</div><div class="coach-text">Below expectations. Win rate 0%, PF 0.00. Review entry filters.</div></div><div class="coach-row"><div class="coach-label">Best Trade</div><div class="coach-text">₹-16 — COALINDIA BUY @ 13:27:06</div></div><div class="coach-row"><div class="coach-label">Worst Trade</div><div class="coach-text">₹-409 — NIFTY23JUN2624050CE CE @ 10:25:36</div></div><div class="coach-row"><div class="coach-label">Primary Failure Cause</div><div class="coach-text">Premature Entry / Quick Reversal</div></div><div class="coach-row"><div class="coach-label">Edge Status</div><div class="coach-text">Edge deteriorating. Reduce trade frequency. Review rules before tomorrow.</div></div><div class="coach-row"><div class="coach-label">Rule to Test Tomorrow</div><div class="coach-text">Collect more data before changing rules</div></div><div class="coach-row"><div class="coach-label">Confidence Level</div><div class="coach-text">LOW — need more data</div></div></div>
+
+<!-- TRADE LOG -->
+<div class="sec"><div class="sec-hdr">Trade Log
+  <span style="margin-left:auto;display:flex;gap:8px">
+    <span id="live-n" style="font-size:11px;color:var(--muted)"></span>
+    <span id="live-wr" style="font-size:11px"></span>
+    <span id="live-pf" style="font-size:11px"></span>
+    <span id="live-net" style="font-size:11px;font-weight:600"></span>
+  </span>
+</div></div>
+<div style="background:var(--bg2);border:1px solid var(--border);border-bottom:none;padding:10px 14px;display:flex;flex-wrap:wrap;gap:8px">
+  <select id="f-date" onchange="applyFilters()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2);padding:4px 8px;font-family:var(--mono);font-size:11px"><option value="">All Dates</option></select>
+  <select id="f-strat" onchange="applyFilters()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2);padding:4px 8px;font-family:var(--mono);font-size:11px"><option value="">All Strategies</option></select>
+  <select id="f-dir" onchange="applyFilters()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2);padding:4px 8px;font-family:var(--mono);font-size:11px"><option value="">All Directions</option></select>
+  <select id="f-exit" onchange="applyFilters()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2);padding:4px 8px;font-family:var(--mono);font-size:11px"><option value="">All Exit Reasons</option></select>
+  <select id="f-result" onchange="applyFilters()" style="background:var(--bg3);color:var(--text);border:1px solid var(--border2);padding:4px 8px;font-family:var(--mono);font-size:11px"><option value="">Win + Loss</option><option value="win">Wins Only</option><option value="loss">Losses Only</option></select>
+  <input id="f-search" oninput="applyFilters()" placeholder="Search symbol..." style="background:var(--bg3);color:var(--text);border:1px solid var(--border2);padding:4px 8px;font-family:var(--mono);font-size:11px;width:140px">
+  <button onclick="resetFilters()" style="background:var(--bg3);color:var(--muted);border:1px solid var(--border2);padding:4px 12px;font-family:var(--mono);font-size:11px;cursor:pointer">RESET</button>
+</div>
+<div style="background:var(--bg2);border:1px solid var(--border);overflow-x:auto">
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th>#</th><th>Strategy</th><th>Symbol</th><th>Dir</th>
+        <th>Entry</th><th>Exit</th><th>Entry ₹</th><th>Exit ₹</th>
+        <th>P&amp;L</th><th>MFE</th><th>MAE</th><th>Cap%</th>
+        <th>Hold</th><th>Exit</th>
+      </tr>
+    </thead>
+    <tbody id="trade-tbody"></tbody>
+  </table>
+</div>
+
+</div><!-- /page -->
+
+<script>
+const TRADES  = [{"id": 98, "date": "2026-06-17", "strategy": "scalper", "instrument": "NIFTY", "symbol": "NIFTY23JUN2624050CE", "direction": "CE", "entry_time": "10:25:36", "exit_time": "10:28:15", "entry_price": 177.6, "exit_price": 171.3, "quantity": 65, "pnl_rs": -409.0, "mfe_pts": 0.6, "mae_pts": -6.3, "capture_pct": 0.0, "adx_entry": 26.8, "exit_reason": "SL_HIT", "hold_seconds": 159, "trend_score": 0.0}, {"id": 99, "date": "2026-06-17", "strategy": "trend_rider", "instrument": "EQUITY", "symbol": "COALINDIA", "direction": "BUY", "entry_time": "13:27:06", "exit_time": "13:29:13", "entry_price": 458.5, "exit_price": 458.35, "quantity": 109, "pnl_rs": -16.0, "mfe_pts": 0.15, "mae_pts": -0.3, "capture_pct": 0.0, "adx_entry": 33.3, "exit_reason": "NO_MOMENTUM_EXIT", "hold_seconds": 126, "trend_score": 81.9}];
+const HOURLY  = [{"hour": "09:xx", "pnl": 0, "trades": 0}, {"hour": "10:xx", "pnl": -409.0, "trades": 1}, {"hour": "11:xx", "pnl": 0, "trades": 0}, {"hour": "12:xx", "pnl": 0, "trades": 0}, {"hour": "13:xx", "pnl": -16.0, "trades": 1}, {"hour": "14:xx", "pnl": 0, "trades": 0}, {"hour": "15:xx", "pnl": 0, "trades": 0}];
+const ROLLING = [{"period": "7 Day", "pnl": "-\u20b9425", "wr": "0.0%", "pf": "0.00", "dd": "-\u20b9425", "best": "-\u20b916", "worst": "-\u20b9409"}, {"period": "14 Day", "pnl": "-\u20b9425", "wr": "0.0%", "pf": "0.00", "dd": "-\u20b9425", "best": "-\u20b916", "worst": "-\u20b9409"}, {"period": "30 Day", "pnl": "-\u20b9425", "wr": "0.0%", "pf": "0.00", "dd": "-\u20b9425", "best": "-\u20b916", "worst": "-\u20b9409"}, {"period": "All Time", "pnl": "-\u20b9425", "wr": "0.0%", "pf": "0.00", "dd": "-\u20b9425", "best": "-\u20b916", "worst": "-\u20b9409"}];
+const WHATIF  = [{"filter": "Score \u2265 85", "removed": 2, "sim_pnl": 0, "verdict": "skip"}, {"filter": "Score \u2265 88", "removed": 2, "sim_pnl": 0, "verdict": "skip"}, {"filter": "Score \u2265 90", "removed": 2, "sim_pnl": 0, "verdict": "skip"}, {"filter": "Score \u2265 92", "removed": 2, "sim_pnl": 0, "verdict": "skip"}, {"filter": "ADX \u2265 28", "removed": 1, "sim_pnl": -16.0, "verdict": "skip"}, {"filter": "ADX \u2265 30", "removed": 1, "sim_pnl": -16.0, "verdict": "skip"}, {"filter": "Score \u2265 80", "removed": 1, "sim_pnl": -16.0, "verdict": "skip"}, {"filter": "BUY only", "removed": 1, "sim_pnl": -16.0, "verdict": "skip"}, {"filter": "Max 1 trade/day", "removed": 1, "sim_pnl": -409.0, "verdict": "skip"}, {"filter": "Entry 09:20\u201311:00", "removed": 1, "sim_pnl": -409.0, "verdict": "skip"}, {"filter": "Entry 09:20\u201311:30", "removed": 1, "sim_pnl": -409.0, "verdict": "skip"}, {"filter": "Entry 09:20\u201312:00", "removed": 1, "sim_pnl": -409.0, "verdict": "skip"}];
+
+// Equity curve
+(function(){
+  const canvas = document.getElementById('equity-canvas');
+  if (!canvas) return;
+  const W = canvas.parentElement.offsetWidth - 32;
+  canvas.width = W;
+  const H = 160;
+  const ctx = canvas.getContext('2d');
+  let running = 0;
+  const pts = [{x:0,y:0}];
+  TRADES.forEach((t,i)=>{ running+=t.pnl_rs; pts.push({x:i+1,y:running}); });
+  const minY=Math.min(...pts.map(p=>p.y));
+  const maxY=Math.max(...pts.map(p=>p.y));
+  const rY=maxY-minY||1;
+  const pad={t:10,r:10,b:20,l:72};
+  const toX=i=>pad.l+(i/(pts.length-1||1))*(W-pad.l-pad.r);
+  const toY=v=>pad.t+(1-(v-minY)/rY)*(H-pad.t-pad.b);
+  ctx.strokeStyle='#1e2428'; ctx.lineWidth=1;
+  for(let g=0;g<=4;g++){
+    const y=pad.t+g*(H-pad.t-pad.b)/4;
+    ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(W-pad.r,y);ctx.stroke();
+    const val=maxY-g*rY/4;
+    ctx.fillStyle='#5a6a78';ctx.font='9px IBM Plex Mono';ctx.textAlign='right';
+    ctx.fillText((val>0?'+':'')+'₹'+Math.round(val).toLocaleString('en-IN'),pad.l-4,y+3);
+  }
+  const grad=ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,'rgba(0,200,122,0.12)');grad.addColorStop(1,'rgba(0,200,122,0)');
+  ctx.beginPath();ctx.moveTo(toX(0),toY(0));
+  pts.forEach((p,i)=>{if(i>0)ctx.lineTo(toX(i),toY(p.y));});
+  ctx.lineTo(toX(pts.length-1),H-pad.b);ctx.lineTo(toX(0),H-pad.b);
+  ctx.closePath();ctx.fillStyle=grad;ctx.fill();
+  ctx.beginPath();
+  pts.forEach((p,i)=>{if(i===0)ctx.moveTo(toX(i),toY(p.y));else ctx.lineTo(toX(i),toY(p.y));});
+  ctx.strokeStyle='#00c87a';ctx.lineWidth=1.5;ctx.stroke();
+  if(minY<0&&maxY>0){
+    ctx.beginPath();ctx.moveTo(pad.l,toY(0));ctx.lineTo(W-pad.r,toY(0));
+    ctx.strokeStyle='#3a4450';ctx.lineWidth=1;ctx.setLineDash([4,4]);ctx.stroke();ctx.setLineDash([]);
+  }
+  pts.forEach((p,i)=>{
+    if(i===0)return;
+    ctx.beginPath();ctx.arc(toX(i),toY(p.y),3,0,Math.PI*2);
+    ctx.fillStyle=TRADES[i-1].pnl_rs>0?'#00c87a':'#e8374a';ctx.fill();
+  });
+})();
+
+// ── Interactive trade table ──────────────────────────────────
+let filtered=[...TRADES]; let sortCol=null; let sortDir=1;
+function populateFilters(){
+  const sel=(id,vals,labels)=>{const s=document.getElementById(id);vals.forEach((v,i)=>{const o=document.createElement('option');o.value=v;o.text=labels?labels[i]:v;s.appendChild(o);});};
+  sel('f-date',[...new Set(TRADES.map(t=>t.date))].sort());
+  sel('f-strat',[...new Set(TRADES.map(t=>t.strategy))].sort());
+  sel('f-dir',[...new Set(TRADES.map(t=>t.direction))].sort());
+  sel('f-exit',[...new Set(TRADES.map(t=>t.exit_reason))].sort(),[...new Set(TRADES.map(t=>t.exit_reason))].sort().map(v=>v.replace(/_/g,' ')));
+}
+function applyFilters(){
+  const d=document.getElementById('f-date').value,s=document.getElementById('f-strat').value,
+    dr=document.getElementById('f-dir').value,e=document.getElementById('f-exit').value,
+    r=document.getElementById('f-result').value,q=document.getElementById('f-search').value.toLowerCase();
+  filtered=TRADES.filter(t=>{
+    if(d&&t.date!==d)return false; if(s&&t.strategy!==s)return false;
+    if(dr&&t.direction!==dr)return false; if(e&&t.exit_reason!==e)return false;
+    if(r==='win'&&t.pnl_rs<=0)return false; if(r==='loss'&&t.pnl_rs>0)return false;
+    if(q&&!t.symbol.toLowerCase().includes(q)&&!t.strategy.toLowerCase().includes(q))return false;
+    return true;
+  });
+  if(sortCol)filtered.sort((a,b)=>{let av=a[sortCol],bv=b[sortCol];if(typeof av==='string'){av=av.toLowerCase();bv=bv.toLowerCase();}return av>bv?sortDir:av<bv?-sortDir:0;});
+  renderTable(); updateBar();
+}
+function resetFilters(){
+  ['f-date','f-strat','f-dir','f-exit','f-result'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-search').value='';
+  sortCol=null;sortDir=1;
+  document.querySelectorAll('.tbl th').forEach(th=>th.classList.remove('sort-asc','sort-desc'));
+  filtered=[...TRADES];renderTable();updateBar();
+}
+function setSort(col){
+  if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=1;}
+  document.querySelectorAll('.tbl th').forEach(th=>th.classList.remove('sort-asc','sort-desc'));
+  const th=document.querySelector(`th[data-col="${col}"]`);
+  if(th)th.classList.add(sortDir===1?'sort-asc':'sort-desc');
+  applyFilters();
+}
+function updateBar(){
+  const n=filtered.length,wins=filtered.filter(t=>t.pnl_rs>0).length;
+  const net=filtered.reduce((s,t)=>s+t.pnl_rs,0);
+  const gp=filtered.filter(t=>t.pnl_rs>0).reduce((s,t)=>s+t.pnl_rs,0);
+  const gl=Math.abs(filtered.filter(t=>t.pnl_rs<=0).reduce((s,t)=>s+t.pnl_rs,0));
+  const pf=gl>0?(gp/gl).toFixed(2):'∞';
+  const wr=n>0?(wins/n*100).toFixed(1):0;
+  document.getElementById('live-n').textContent=n+' trades';
+  const wre=document.getElementById('live-wr');wre.textContent=wr+'%';wre.className=parseFloat(wr)>=50?'td-pos':'td-neg';
+  const pfe=document.getElementById('live-pf');pfe.textContent='PF '+pf;pfe.className=parseFloat(pf)>=1?'td-pos':'td-neg';
+  const ne=document.getElementById('live-net');ne.textContent=(net>=0?'+':'')+'₹'+Math.abs(Math.round(net)).toLocaleString('en-IN');ne.className=net>=0?'td-pos':'td-neg';
+}
+const tbody=document.getElementById('trade-tbody');
+const dirPillMap={CE:'pill-ce',PE:'pill-pe',BUY:'pill-buy'};
+const exitPillMap={TARGET:'pill-target',TRAIL:'pill-trail',TRAILING_SL:'pill-trail',
+  SL:'pill-sl',SL_HIT:'pill-sl',HIGH_WATER_EXIT:'pill-hw',
+  NO_MOMENTUM_EXIT:'pill-nm',TIME_EXIT:'pill-time',HARD_EXIT:'pill-time'};
+function renderTable(){
+  tbody.innerHTML='';
+  if(!filtered.length){tbody.innerHTML='<tr><td colspan="15" style="text-align:center;color:var(--muted);padding:20px">No trades match filters</td></tr>';return;}
+  filtered.forEach((t,i)=>{
+  const pnlCls=t.pnl_rs>0?'td-pos':t.pnl_rs<0?'td-neg':'td-dim';
+  const pnlStr=(t.pnl_rs>=0?'+':'')+'₹'+Math.abs(t.pnl_rs).toLocaleString('en-IN');
+  const capStr=t.capture_pct>0?t.capture_pct.toFixed(0)+'%':'—';
+  const dur=t.hold_seconds<60?t.hold_seconds+'s':Math.floor(t.hold_seconds/60)+'m';
+  const dp=dirPillMap[t.direction]||'';
+  const ep=exitPillMap[t.exit_reason]||'';
+  tbody.innerHTML+=`<tr>
+    <td class="td-dim">${i+1}</td>
+    <td class="td-hi">${t.strategy}</td>
+    <td>${t.symbol}</td>
+    <td><span class="pill ${dp}">${t.direction}</span></td>
+    <td class="td-dim">${t.entry_time}</td>
+    <td class="td-dim">${t.exit_time}</td>
+    <td>${t.entry_price.toFixed(1)}</td>
+    <td>${t.exit_price.toFixed(1)}</td>
+    <td class="${pnlCls}">${pnlStr}</td>
+    <td>${t.mfe_pts.toFixed(1)}</td>
+    <td class="td-neg">${t.mae_pts.toFixed(1)}</td>
+    <td class="${t.capture_pct>=70?'td-pos':t.capture_pct>0?'td-warn':'td-neg'}">${capStr}</td>
+    <td class="td-dim">${dur}</td>
+    <td><span class="pill ${ep}">${t.exit_reason.replace(/_/g,' ')}</span></td>
+  </tr>`;
+  });
+}
+populateFilters();renderTable();updateBar();
+document.querySelectorAll('.tbl th[data-col]').forEach(th=>{th.style.cursor='pointer';th.addEventListener('click',()=>setSort(th.dataset.col));});
+</script>
+</body>
+</html>
